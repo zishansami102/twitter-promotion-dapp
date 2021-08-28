@@ -1,81 +1,91 @@
 // SPDX-License-Identifier: MIT
+pragma solidity ^0.6.7;
+import "./APIConsumer.sol";
+contract TwitterTask{
+    
+    APIConsumer apiConsumer;
 
-pragma solidity ^0.8.0;
-
-contract TwitterTasks {
+    constructor() public {
+        address _add = 0x91b73Ca01420713E6AF11bE82724b3D3BFD0A50a;
+        apiConsumer = APIConsumer(_add);
+    }
+    
+    struct taskStruct{
+        uint id;
+        address owner;
+        string title;
+        string mustHavePhrase;
+        uint totalReward;
+        uint unclaimedReward;
+        uint rewardPerUnit;
+        bool completed;
+    }
+    
     uint taskCount;
-    
-    
-    
-    enum tweetMetrics {
-        Likes,
-        Comments,
-        Retweets
+    mapping(uint => taskStruct) Task;
+   
+    function createTask(string memory _title, string memory _mustHavePhrase, uint _rewardPerUnit) payable public {
+        
+        taskCount++;
+        Task[taskCount] = taskStruct(taskCount, msg.sender, _title, _mustHavePhrase, msg.value, msg.value, _rewardPerUnit, false);
     }
     
-    enum promotionCateg {
-        Business,
-        Finance,
-        Technology,
-        Fashion,
-        Fitness,
-        Food,
-        Other
+    struct tweetAdmin{
+        address admin;
+        bool exists;
     }
     
-    struct Task {
-    uint id;
-    string title;
-    string mustHavePhrases;
-    uint totalRewardOffered;
-    uint unclaimedReward;
-    tweetMetrics metric;
-    uint metricStepValue;
-    uint stepRewardOffered;
-    promotionCateg category;
-    bool completed;
-  }
-  
-  mapping(uint => Task) public tasks;
-  mapping(string => uint) public claimedRewards;
-  
-  function createTask(string memory _title, string memory _mustHavePhrases, uint _rewardOffered, tweetMetrics _metric, uint _metricStepValue, uint _stepRewardOffered, promotionCateg _categ) public {
-      // add check on parameters
-      
-      taskCount ++;
-      tasks[taskCount] = Task(taskCount, _title, _mustHavePhrases, _rewardOffered, _rewardOffered, _metric, _metricStepValue, _stepRewardOffered, _categ, false);
-  }
-  
-  function getTask(uint _id) public view returns (Task memory) {
-      // add check on parameters
-      
-      return tasks[_id];
-  }
-  
-  function getAllTasks() public view returns (Task[] memory) {
-      Task[] memory allTasks = new Task[](taskCount);
-      for (uint i = 0; i < taskCount; i++) {
-        allTasks[i] = tasks[i+1];
-      }
-      return allTasks;
-  }
-  
-  function checkRewardEligibility(uint _taskId, string memory tweetId) public view returns (uint) {
-      // add check on parameters
-      
-      uint reward = 0;
-      if (tasks[_taskId].completed || tasks[_taskId].unclaimedReward < tasks[_taskId].stepRewardOffered) {
-          return reward;
-      }
-      // manully setting gained metric steps (will later update to counting the steps when chainLink is integrated)
-      uint metricAchieved = tasks[_taskId].metricStepValue + 1;
-      
-      reward = ( metricAchieved / tasks[_taskId].metricStepValue ) * tasks[_taskId].stepRewardOffered - claimedRewards[tweetId];
-    //   claimedRewards[tweetId] = claimedRewards[tweetId] + reward;
-      return reward;
-  }
-  
-//   function claimReward(uint _taskId, )
-  
-  
+    mapping(string => tweetAdmin) tweetClient;
+ 
+    function applyTask(string memory _tweetId, uint _taskId) public{
+        require(!tweetClient[_tweetId].exists, "Tweet already registered");
+        require(verify(_tweetId,_taskId), "You are not eligible");
+ 
+        tweetClient[_tweetId].admin = msg.sender;
+        tweetClient[_tweetId].exists = true;
+    }
+    
+   function verify(string memory _tweetId, uint _taskId) private view returns(bool){
+       string memory tweet = apiConsumer.getTweet(_tweetId);
+       
+       return stringContains(Task[_taskId].mustHavePhrase, tweet);
+    }
+    
+    mapping(string => uint) claimedReward;
+    
+    function claimReward(string memory _tweetId, uint _taskId) public {
+        require(tweetClient[_tweetId].exists, "Tweet not verified");
+        require(Task[_taskId].unclaimedReward > Task[_taskId].rewardPerUnit,"No rewards left. Task is completed.");
+        
+        uint reward;
+        
+        reward = Task[_taskId].rewardPerUnit * 1 ether * getNoOfUnits(_tweetId) - claimedReward[_tweetId];
+        payable(tweetClient[_tweetId].admin).transfer(reward);
+        claimedReward[_tweetId] += reward;
+        Task[_taskId].unclaimedReward -= reward;
+    }
+    
+    function getNoOfUnits(string memory _tweetId) private view returns(uint){
+        return apiConsumer.getLikes(_tweetId);
+    }
+    
+    function stringContains(string memory what, string memory where) private pure returns(bool) {
+        bytes memory whatBytes = bytes (what);
+        bytes memory whereBytes = bytes (where);
+    
+        bool found = false;
+        for (uint i = 0; i < whereBytes.length - whatBytes.length; i++) {
+            bool flag = true;
+            for (uint j = 0; j < whatBytes.length; j++)
+                if (whereBytes [i + j] != whatBytes [j]) {
+                    flag = false;
+                    break;
+                }
+            if (flag) {
+                found = true;
+                break;
+            }
+        }
+        return found;
+    }
 }
