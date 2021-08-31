@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.6.7;
 
-import "@chainlink/contracts/src/v0.6/ChainlinkClient.sol";
+import "../contracts/v0.6/ChainlinkClient.sol";
 
 /**
  * THIS IS AN EXAMPLE CONTRACT WHICH USES HARDCODED VALUES FOR CLARITY.
@@ -56,6 +56,7 @@ contract APIConsumer is ChainlinkClient {
         request.add("path", "no_like");
         
         // Multiply the result by 1000000000000000000 to remove decimals
+        
         int timesAmount = 1;
         request.addInt("times", timesAmount);
         
